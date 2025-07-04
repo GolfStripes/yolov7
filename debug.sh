@@ -1,4 +1,3 @@
-docker rm yolov7
 docker build -t yolov7 .
 docker run \
   -v ~/.aws:/root/.aws:ro \

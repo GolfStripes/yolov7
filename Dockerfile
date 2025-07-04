@@ -12,16 +12,9 @@ RUN pip install -U pip
 RUN pip install onnxruntime opencv-python-headless pillow pyyaml filterpy
 WORKDIR /usr/src
 RUN git clone https://github.com/GolfStripes/yolov7.git
-RUN git checkout jgrubb/dev
 WORKDIR /usr/src/yolov7
+RUN git checkout jgrubb/dev
 RUN pip install -r requirements.txt
-COPY entrypoint.sh /entrypoint.sh
-COPY models/experimental.py models/experimental.py
-COPY data/golfstripes.yaml data/golfstripes.yaml
-COPY cfg/training/yolov7-gs.yaml cfg/training/yolov7-gs.yaml
-COPY utils/datasets.py utils/datasets.py
-COPY utils/loss.py utils/loss.py
-COPY utils/general.py utils/general.py
-COPY train.py train.py
-
 CMD ["python3", "main.py"]
+#COPY entrypoint.sh /usr/src/yolov7/entrypoint.sh
+#ENTRYPOINT ["/usr/src/yolov7/entrypoint.sh"]
