@@ -19,15 +19,15 @@ def main():
         s3.download_fileobj(bucket, key, f)
 
     # Call detect.py and pass the file path
-    print(f"🚀 Running detect.py on {local_filename} ...")
-    result = subprocess.run(["python", "detect.py", local_filename], capture_output=True, text=True)
+    #print(f"🚀 Running detect.py on {local_filename} ...")
+    #result = subprocess.run(["python", "detect.py", local_filename], capture_output=True, text=True)
 
-    print("📤 Output from detect.py:")
-    print(result.stdout)
+    #print("📤 Output from detect.py:")
+    #print(result.stdout)
 
-    if result.returncode != 0:
-        print("❌ detect.py failed:", result.stderr)
-        raise subprocess.CalledProcessError(result.returncode, result.args)
+    #if result.returncode != 0:
+    #    print("❌ detect.py failed:", result.stderr)
+    #    raise subprocess.CalledProcessError(result.returncode, result.args)
 
 if __name__ == "__main__":
     main()
