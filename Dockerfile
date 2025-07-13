@@ -1,23 +1,47 @@
+# Stage 1: Builder
+FROM ubuntu:22.04 as builder
+LABEL stage="builder"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y python3-pip git wget libgl1-mesa-dev libglib2.0-0 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python packages into a directory
+RUN python3 -m pip install --upgrade pip
+RUN mkdir -p /install
+RUN python3 -m pip install --target=/install \
+    onnxruntime opencv-python-headless pillow pyyaml filterpy
+
+# Clone repo and install additional requirements
+WORKDIR /tmp/yolov7
+RUN git clone https://github.com/GolfStripes/yolov7.git . && \
+    git checkout jgrubb/dev
+
+RUN python3 -m pip install --target=/install -r requirements.txt
+
+# Stage 2: Runtime
 FROM ubuntu:22.04
-USER root
 
-LABEL version="1.0"
-LABEL description="yolov7-onnx"
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update
-RUN apt-get -y install pip
-RUN apt-get -y install libgl1-mesa-dev && apt-get -y install libglib2.0-0 git
-RUN apt update && apt install -y wget python3-pip
-RUN pip install -U pip
-RUN pip install onnxruntime opencv-python-headless pillow pyyaml filterpy
-RUN echo 1
-WORKDIR /usr/src
-RUN git clone https://github.com/GolfStripes/yolov7.git
+RUN apt-get update && \
+    apt-get install -y python3 wget libgl1-mesa-dev libglib2.0-0 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local/lib/python3.10/dist-packages
+
+# Copy your app
 WORKDIR /usr/src/yolov7
-RUN git checkout jgrubb/dev
-RUN pip install -r requirements.txt
+COPY --from=builder /tmp/yolov7 /usr/src/yolov7
 COPY best.pt best.pt
 COPY main.py main.py
-#CMD ["python3", "main.py"]
-COPY entrypoint.sh /usr/src/yolov7/entrypoint.sh
-ENTRYPOINT ["/usr/src/yolov7/entrypoint.sh"]
+COPY entrypoint.sh entrypoint.sh
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["python3", "main.py"]
+#ENTRYPOINT ["./entrypoint.sh"]
