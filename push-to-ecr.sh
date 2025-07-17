@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e  # Exit on error
 
-# (Re)download the model weights
-echo "📥 Downloading model weights..."
-aws s3 cp s3://dev-golfstripes-model-data/models/yolov7/gs-v1/best.pt .
+# download the model weights
+if [ ! -f best.pt ]; then
+  echo "Weights not found, downloading from S3..."
+  aws s3 cp s3://dev-golfstripes-model-data/models/yolov7/gs-v1/best.pt .
+else
+  echo "File already exists, skipping download."
+fi
 
 # Define image names
 LOCAL_TAG="gs-yolov7:latest"
@@ -28,4 +32,3 @@ echo "🚀 Pushing image to ECR..."
 docker push $ECR_REPO
 
 echo "✅ Done! Image pushed to $ECR_REPO"
-
