@@ -1,6 +1,8 @@
 import os
 import subprocess
 import boto3
+import json
+import traceback
 
 Y7_PROJECT_DIR = "/usr/src/yolov7"
 Y7_EXP_DIR = os.path.join(Y7_PROJECT_DIR, "exp")
