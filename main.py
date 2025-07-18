@@ -1,46 +1,13 @@
 import os
 import subprocess
 import boto3
-import traceback
-import json
 
+from step_function_reporter import StepFunctionReporter
 
 Y7_PROJECT_DIR = "/usr/src/yolov7"
 Y7_EXP_DIR = os.path.join(Y7_PROJECT_DIR, "exp")
 Y7_LABELS_DIR = os.path.join(Y7_EXP_DIR, "labels")
 
-class StepFunctionReporter:
-    def __init__(self, task_token=None):
-        self.task_token = task_token or os.environ.get("TASK_TOKEN")
-        self.client = boto3.client("stepfunctions") if self.task_token else None
-
-    def send_success(self, output: dict = None):
-        if self.client and self.task_token:
-            print("✅ Sending task success to Step Functions...")
-            self.client.send_task_success(
-                taskToken=self.task_token,
-                output=json.dumps(output or {"status": "done"})
-            )
-
-    def send_failure(self, error="TaskFailed", cause=None):
-        if self.client and self.task_token:
-            print("❌ Sending task failure to Step Functions...")
-            self.client.send_task_failure(
-                taskToken=self.task_token,
-                error=error,
-                cause=cause or "Unknown failure"
-            )
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, tb):
-        if exc_type is None:
-            self.send_success()
-        else:
-            cause = ''.join(traceback.format_exception(exc_type, exc_value, tb))
-            self.send_failure(error=exc_type.__name__, cause=cause)
-            return False  # Re-raise exception
 
 def parse_s3_path(s3_path):
     if not s3_path.startswith("s3://"):
@@ -101,11 +68,17 @@ def upload_results_to_s3(input_s3_path):
 
 def main():
     with StepFunctionReporter():
-        s3_path = os.environ.get("INPUT")
-        if not s3_path:
-            raise ValueError("Missing INPUT env var")
+        bucket = os.environ.get("DATA_BUCKET")
+        order_id = os.environ.get("ORDER_ID")
+        s3_prefix = os.environ.get("S3_PREFIX", "orders")  # default fallback
 
-        local_tmp_file = os.path.join("/tmp", os.path.basename(s3_path))
+        if not bucket or not order_id:
+            raise ValueError("Missing required environment variables: DATA_BUCKET and/or ORDER_ID")
+
+        image_key = f"{s3_prefix}/{order_id}/user_image.jpg"
+        s3_path = f"s3://{bucket}/{image_key}"
+        local_tmp_file = os.path.join("/tmp", os.path.basename(image_key))
+
         download_from_s3(s3_path, local_tmp_file)
         run_detection(local_tmp_file)
         upload_results_to_s3(s3_path)
