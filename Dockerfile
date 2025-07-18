@@ -50,7 +50,7 @@ COPY --from=builder /tmp/yolov7 /usr/src/yolov7
 
 # Add entrypoint
 COPY main.py main.py
-COPY StepFunctionReporter.py StepFunctionReporter.py
+COPY step_function_reporter.py StepFunctionReporter.py
 COPY entrypoint.sh entrypoint.sh
 RUN chmod +x entrypoint.sh
 
