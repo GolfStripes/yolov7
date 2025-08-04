@@ -3,5 +3,6 @@ docker run \
   -v ~/.aws:/root/.aws \
   -e AWS_PROFILE=golfstripes \
   -e AWS_DEFAULT_REGION=us-east-1 \
-  -e INPUT=s3://dev-golfstripes-ferrule-data/v2/test/dan_ferrule.jpg \
+  -e DATA_BUCKET=dev-golfstripes-ferrule-data \
+  -e ORDER_ID=1369 \
   yolov7

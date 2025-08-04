@@ -3,6 +3,7 @@ import subprocess
 import boto3
 import json
 import traceback
+import time
 
 Y7_PROJECT_DIR = "/usr/src/yolov7"
 Y7_EXP_DIR = os.path.join(Y7_PROJECT_DIR, "exp")
@@ -56,7 +57,54 @@ def download_from_s3(s3_path, dest_path):
     with open(dest_path, 'wb') as f:
         s3.download_fileobj(bucket, key, f)
 
+
+import cv2
+from PIL import Image
+
 def run_detection(local_image_path):
+    print(f"🧪 Sanity check on image path: {repr(local_image_path)}")
+
+    if not os.path.isfile(local_image_path):
+        raise FileNotFoundError(f"❌ File does not exist: {local_image_path}")
+
+    img = cv2.imread(local_image_path)
+    if img is None:
+        print("⚠️ OpenCV failed to read the image. Investigating...")
+
+        # Try with Pillow to see if it's an OpenCV codec issue
+        try:
+            Image.open(local_image_path).verify()
+            print("✅ PIL can open the image. Likely an OpenCV codec issue.")
+        except Exception as e:
+            raise ValueError(f"❌ Both OpenCV and PIL failed to read the image: {e}")
+
+        # Optional: print OpenCV build info
+        print("\n📋 OpenCV build information:")
+        print(cv2.getBuildInformation())
+
+        raise ValueError("cv2.imread() returned None - OpenCV could not read the image.")
+
+    print("✅ OpenCV successfully loaded the image.")
+
+    print(f"🚀 Running detect.py on {local_image_path} ...")
+    result = subprocess.run([
+        "python3", "detect.py",
+        "--weights", os.path.join(Y7_PROJECT_DIR, "best.pt"),
+        "--conf", "0.8",
+        "--img-size", "640",
+        "--save-txt",
+        "--project", Y7_PROJECT_DIR,
+        "--source", local_image_path
+    ], capture_output=True, text=True)
+
+    print("📤 Output from detect.py:")
+    print(result.stdout)
+
+    if result.returncode != 0:
+        print("❌ detect.py failed:", result.stderr)
+        raise subprocess.CalledProcessError(result.returncode, result.args)
+
+def run_detection2(local_image_path):
     print(f"🚀 Running detect.py on {local_image_path} ...")
     result = subprocess.run([
         "python3", "detect.py",
