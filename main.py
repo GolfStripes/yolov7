@@ -109,6 +109,51 @@ def http_post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(f"POST failed: {url} status={e.code} body={body}") from e
 
 
+def log_directory_tree(path: str, *, title: str | None = None, max_depth: int = 4) -> None:
+    """
+    Debug helper to print a readable directory tree.
+
+    This is useful when YOLO writes artifacts somewhere different than expected.
+    """
+    if title:
+        print(f"🔎 {title}")
+
+    if not os.path.exists(path):
+        print(f"   Path does not exist: {path}")
+        return
+
+    if os.path.isfile(path):
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = "unknown"
+
+        print(f"   📄 {path} ({size} bytes)")
+        return
+
+    root_depth = path.rstrip(os.sep).count(os.sep)
+
+    for current_root, dirs, files in os.walk(path):
+        current_depth = current_root.rstrip(os.sep).count(os.sep) - root_depth
+
+        if current_depth > max_depth:
+            dirs[:] = []
+            continue
+
+        indent = "  " * current_depth
+        print(f"{indent}📁 {current_root}")
+
+        for filename in sorted(files):
+            file_path = os.path.join(current_root, filename)
+
+            try:
+                size = os.path.getsize(file_path)
+            except OSError:
+                size = "unknown"
+
+            print(f"{indent}  📄 {filename} ({size} bytes)")
+
+
 def get_original_variant_metadata(*, media_api_url: str, media_id: str) -> dict[str, Any]:
     """
     Calls:
@@ -214,27 +259,31 @@ def run_detection(local_image_path: str) -> dict[str, str]:
 
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
+    cmd = [
+        "python3",
+        "detect.py",
+        "--weights",
+        Y7_WEIGHTS_PATH,
+        "--conf",
+        "0.8",
+        "--img-size",
+        "640",
+        "--save-txt",
+        "--project",
+        YOLO_RUNS_DIR,
+        "--name",
+        YOLO_RUN_NAME,
+        "--exist-ok",
+        "--source",
+        local_image_path,
+    ]
+
     print(f"🚀 Running detect.py on {local_image_path}")
+    print("🧾 YOLO command:")
+    print(" ".join(cmd))
 
     result = subprocess.run(
-        [
-            "python3",
-            "detect.py",
-            "--weights",
-            Y7_WEIGHTS_PATH,
-            "--conf",
-            "0.8",
-            "--img-size",
-            "640",
-            "--save-txt",
-            "--project",
-            YOLO_RUNS_DIR,
-            "--name",
-            YOLO_RUN_NAME,
-            "--exist-ok",
-            "--source",
-            local_image_path,
-        ],
+        cmd,
         cwd=Y7_PROJECT_DIR,
         capture_output=True,
         text=True,
@@ -243,9 +292,18 @@ def run_detection(local_image_path: str) -> dict[str, str]:
     print("📤 Output from detect.py:")
     print(result.stdout)
 
-    if result.returncode != 0:
-        print("❌ detect.py stderr:")
+    if result.stderr:
+        print("📥 stderr from detect.py:")
         print(result.stderr)
+
+    if result.returncode != 0:
+        print("❌ detect.py failed.")
+
+        log_directory_tree(
+            YOLO_RUNS_DIR,
+            title=f"Contents of YOLO_RUNS_DIR after failure: {YOLO_RUNS_DIR}",
+        )
+
         raise subprocess.CalledProcessError(
             result.returncode,
             result.args,
@@ -256,16 +314,60 @@ def run_detection(local_image_path: str) -> dict[str, str]:
     detected_image_path = os.path.join(YOLO_OUTPUT_DIR, base_name)
     labels_path = os.path.join(YOLO_LABELS_DIR, f"{name_root}.txt")
 
+    print(f"🧭 Expected detected image path: {detected_image_path}")
+    print(f"🧭 Expected labels path: {labels_path}")
+
     if not os.path.exists(detected_image_path):
+        print(f"❌ Expected YOLO output image not found: {detected_image_path}")
+
+        log_directory_tree(
+            YOLO_RUNS_DIR,
+            title=f"Contents of YOLO_RUNS_DIR: {YOLO_RUNS_DIR}",
+        )
+
+        log_directory_tree(
+            YOLO_OUTPUT_DIR,
+            title=f"Contents of YOLO_OUTPUT_DIR: {YOLO_OUTPUT_DIR}",
+        )
+
         raise FileNotFoundError(f"YOLO output image not found: {detected_image_path}")
 
     # If YOLO finds no objects, the label file may not exist.
     # Create an empty one so downstream steps have a consistent artifact.
     if not os.path.exists(labels_path):
+        print(f"⚠️ Expected YOLO labels file not found: {labels_path}")
+
+        log_directory_tree(
+            YOLO_RUNS_DIR,
+            title=f"Contents of YOLO_RUNS_DIR: {YOLO_RUNS_DIR}",
+        )
+
+        log_directory_tree(
+            YOLO_OUTPUT_DIR,
+            title=f"Contents of YOLO_OUTPUT_DIR: {YOLO_OUTPUT_DIR}",
+        )
+
+        log_directory_tree(
+            YOLO_LABELS_DIR,
+            title=f"Contents of YOLO_LABELS_DIR: {YOLO_LABELS_DIR}",
+        )
+
         print("ℹ️ No YOLO labels file found. Creating empty labels artifact.")
         os.makedirs(os.path.dirname(labels_path), exist_ok=True)
         with open(labels_path, "w", encoding="utf-8") as f:
             f.write("")
+
+    try:
+        with open(labels_path, "r", encoding="utf-8") as f:
+            labels_contents = f.read().strip()
+
+        if labels_contents:
+            print("✅ YOLO labels file contains detections:")
+            print(labels_contents)
+        else:
+            print("⚠️ YOLO labels file exists but is empty.")
+    except Exception as e:
+        print(f"⚠️ Could not read labels file for debugging: {e}")
 
     return {
         "detected_image_path": detected_image_path,
